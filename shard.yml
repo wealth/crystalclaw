@@ -1,0 +1,15 @@
+name: crystalclaw
+version: 0.1.0
+description: |
+  Ultra-lightweight personal AI assistant — Crystal port of PicoClaw
+
+authors:
+  - CrystalClaw contributors
+
+targets:
+  crystalclaw:
+    main: src/crystalclaw.cr
+
+crystal: ">= 1.10.0"
+
+license: MIT
