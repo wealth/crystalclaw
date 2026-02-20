@@ -257,18 +257,41 @@ module CrystalClaw
             next
           end
 
-          # Markdown table: collect all consecutive | lines, render as <pre>
+          # Markdown table: collect all consecutive | lines, parse and align
           if line.strip.starts_with?("|") && line.strip.ends_with?("|")
-            table_lines = [] of String
+            rows = [] of Array(String)
             while i < lines.size && lines[i].strip.starts_with?("|") && lines[i].strip.ends_with?("|")
               row = lines[i].strip
               # Skip separator rows (|---|---|)
               unless row.gsub(/[|\-:\s]/, "").empty?
-                table_lines << escape_html(row)
+                cells = row.split('|').map(&.strip)
+                # Remove empty first/last from leading/trailing |
+                cells.shift if cells.first?.try(&.empty?)
+                cells.pop if cells.last?.try(&.empty?)
+                rows << cells
               end
               i += 1
             end
-            result << "<pre>#{table_lines.join('\n')}</pre>"
+
+            unless rows.empty?
+              # Calculate max width per column
+              col_count = rows.map(&.size).max
+              col_widths = Array.new(col_count, 0)
+              rows.each do |cells|
+                cells.each_with_index do |cell, ci|
+                  col_widths[ci] = {col_widths[ci], cell.size}.max
+                end
+              end
+
+              # Render aligned table
+              formatted = rows.map do |cells|
+                cells.map_with_index do |cell, ci|
+                  cell.ljust(col_widths[ci])
+                end.join("  ")
+              end.join('\n')
+
+              result << "<pre>#{escape_html(formatted)}</pre>"
+            end
             next
           end
 
