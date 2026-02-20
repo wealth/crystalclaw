@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-CONFIG_DIR="/home/crystalclaw/.crystalclaw"
+export HOME=/home/crystalclaw
+CONFIG_DIR="${HOME}/.crystalclaw"
 CONFIG_FILE="${CONFIG_DIR}/config.json"
 
 # Fix ownership of the mounted volume (may be root-owned from Docker)
