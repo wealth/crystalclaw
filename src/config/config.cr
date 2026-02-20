@@ -64,25 +64,25 @@ module CrystalClaw
     end
 
     private def self.apply_env_overrides(cfg : Config)
-      if val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_WORKSPACE"]?
+      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_WORKSPACE"]?) && !val.empty?
         cfg.agents.defaults.workspace = val
       end
-      if val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_MODEL"]?
+      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_MODEL"]?) && !val.empty?
         cfg.agents.defaults.model = val
       end
-      if val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_MAX_TOKENS"]?
+      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_MAX_TOKENS"]?) && !val.empty?
         cfg.agents.defaults.max_tokens = val.to_i
       end
-      if val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_TEMPERATURE"]?
+      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_TEMPERATURE"]?) && !val.empty?
         cfg.agents.defaults.temperature = val.to_f
       end
-      if val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"]?
+      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"]?) && !val.empty?
         cfg.agents.defaults.restrict_to_workspace = (val.downcase == "true")
       end
-      if val = ENV["CRYSTALCLAW_HEARTBEAT_ENABLED"]?
+      if (val = ENV["CRYSTALCLAW_HEARTBEAT_ENABLED"]?) && !val.empty?
         cfg.heartbeat.enabled = (val.downcase == "true")
       end
-      if val = ENV["CRYSTALCLAW_HEARTBEAT_INTERVAL"]?
+      if (val = ENV["CRYSTALCLAW_HEARTBEAT_INTERVAL"]?) && !val.empty?
         cfg.heartbeat.interval = val.to_i
       end
     end
