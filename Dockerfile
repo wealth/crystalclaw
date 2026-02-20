@@ -33,6 +33,9 @@ COPY --from=builder /app/bin/crystalclaw /app/bin/crystalclaw
 # Copy workspace templates (used by the onboard command)
 COPY workspace/ /app/workspace/
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+
 # Create default config and workspace directories
 RUN mkdir -p /home/crystalclaw/.crystalclaw/workspace && \
     chown -R crystalclaw:crystalclaw /home/crystalclaw /app
@@ -44,5 +47,5 @@ EXPOSE 18791
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:18791/health || exit 1
 
-ENTRYPOINT ["/app/bin/crystalclaw"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["gateway"]
