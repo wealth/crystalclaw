@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Copy dependency manifest first for layer caching
 COPY shard.yml ./
+COPY shard.lock ./
 RUN shards install --production
 
 # Copy source and workspace templates
