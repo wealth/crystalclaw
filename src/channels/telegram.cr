@@ -145,11 +145,12 @@ module CrystalClaw
 
         # Edit the thinking message with the first chunk
         edit_url = "https://api.telegram.org/bot#{@token}/editMessageText"
+        escaped = escape_markdown_v2(chunks[0])
         body = {
           "chat_id"    => chat_id,
           "message_id" => message_id,
-          "text"       => chunks[0],
-          "parse_mode" => "Markdown",
+          "text"       => escaped,
+          "parse_mode" => "MarkdownV2",
         }.to_json
 
         begin
@@ -198,17 +199,29 @@ module CrystalClaw
 
       private def send_single_chunk(chat_id : String, chunk : String)
         url = "https://api.telegram.org/bot#{@token}/sendMessage"
+        escaped = escape_markdown_v2(chunk)
         body = {
           "chat_id"    => chat_id,
-          "text"       => chunk,
-          "parse_mode" => "Markdown",
+          "text"       => escaped,
+          "parse_mode" => "MarkdownV2",
         }.to_json
 
         begin
-          HTTP::Client.post(url,
+          response = HTTP::Client.post(url,
             headers: HTTP::Headers{"Content-Type" => "application/json"},
             body: body
           )
+          unless response.success?
+            # Retry without markdown on parse error
+            body_plain = {
+              "chat_id" => chat_id,
+              "text"    => chunk,
+            }.to_json
+            HTTP::Client.post(url,
+              headers: HTTP::Headers{"Content-Type" => "application/json"},
+              body: body_plain
+            )
+          end
         rescue ex
           # Retry without markdown on parse error
           body_plain = {
@@ -220,6 +233,57 @@ module CrystalClaw
             body: body_plain
           )
         end
+      end
+
+      # Escape text for Telegram MarkdownV2 format.
+      # Preserves code blocks (``` and `) and bold (**) formatting,
+      # escapes all other special characters.
+      private def escape_markdown_v2(text : String) : String
+        result = String::Builder.new
+        i = 0
+        chars = text
+
+        while i < chars.size
+          # Preserve fenced code blocks (```...```)
+          if i + 2 < chars.size && chars[i] == '`' && chars[i + 1] == '`' && chars[i + 2] == '`'
+            end_pos = chars.index("```", i + 3)
+            if end_pos
+              result << chars[i..end_pos + 2]
+              i = end_pos + 3
+              next
+            end
+          end
+
+          # Preserve inline code (`...`)
+          if chars[i] == '`'
+            end_pos = chars.index('`', i + 1)
+            if end_pos
+              result << chars[i..end_pos]
+              i = end_pos + 1
+              next
+            end
+          end
+
+          # Convert ** bold to * bold (MarkdownV2 uses single *)
+          if i + 1 < chars.size && chars[i] == '*' && chars[i + 1] == '*'
+            result << '*'
+            i += 2
+            next
+          end
+
+          # Escape MarkdownV2 special chars (except those we handle above)
+          if "_[]()~>#+-=|{}.!\\".includes?(chars[i])
+            result << '\\'
+            result << chars[i]
+            i += 1
+            next
+          end
+
+          result << chars[i]
+          i += 1
+        end
+
+        result.to_s
       end
 
       private def split_message(text : String, max_length : Int32) : Array(String)
