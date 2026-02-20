@@ -9,7 +9,7 @@ services:
       - "18791:18791"
     volumes:
       # Mount your host config into the container
-      - ${CRYSTALCLAW_CONFIG_DIR:-~/.crystalclaw}:/home/crystalclaw/.crystalclaw
+      - ~/.crystalclaw:/home/crystalclaw/.crystalclaw
     environment:
       # Override any config value via env vars (see src/config/config.cr)
       - CRYSTALCLAW_AGENTS_DEFAULTS_MODEL=${CRYSTALCLAW_AGENTS_DEFAULTS_MODEL:-}
