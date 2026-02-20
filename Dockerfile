@@ -20,7 +20,8 @@ FROM alpine:3.21
 
 RUN apk add --no-cache \
     ca-certificates \
-    tzdata
+    tzdata \
+    su-exec
 
 # Create a non-root user
 RUN addgroup -S crystalclaw && adduser -S crystalclaw -G crystalclaw
@@ -36,11 +37,8 @@ COPY workspace/ /app/workspace/
 # Copy entrypoint script
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
-# Create default config and workspace directories
-RUN mkdir -p /home/crystalclaw/.crystalclaw/workspace && \
-    chown -R crystalclaw:crystalclaw /home/crystalclaw /app
-
-USER crystalclaw
+# Set ownership of app directory (volumes are fixed at runtime by entrypoint)
+RUN chown -R crystalclaw:crystalclaw /home/crystalclaw /app
 
 EXPOSE 18791
 
