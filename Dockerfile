@@ -24,10 +24,14 @@ RUN apk add --no-cache \
     ca-certificates \
     tzdata \
     su-exec \
-    libpq
+    libpq \
+    sudo
 
-# Create a non-root user
-RUN addgroup -S crystalclaw && adduser -S crystalclaw -G crystalclaw
+# Create a non-root user and allow passwordless sudo
+RUN addgroup -S crystalclaw && adduser -S crystalclaw -G crystalclaw \
+    && echo "crystalclaw ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers \
+    && echo -e '#!/bin/sh\nexec sudo /sbin/apk "$@"' > /usr/local/bin/apk \
+    && chmod +x /usr/local/bin/apk
 
 WORKDIR /app
 
