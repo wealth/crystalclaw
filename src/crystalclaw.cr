@@ -387,15 +387,17 @@ module CrystalClaw
     end
 
     # Wait for signal
-    Signal::INT.trap do
-      puts "\nShutting down..."
-      agent_loop.stop
-      channel_manager.stop_all
-      heartbeat.stop
-      cron_service.stop
-      health.stop
-      puts "✓ Gateway stopped"
-      exit(0)
+    [Signal::INT, Signal::TERM].each do |signal|
+      signal.trap do
+        puts "\nShutting down..."
+        agent_loop.stop
+        channel_manager.stop_all
+        heartbeat.stop
+        cron_service.stop
+        health.stop
+        puts "✓ Gateway stopped"
+        exit(0)
+      end
     end
 
     # Keep main fiber alive
