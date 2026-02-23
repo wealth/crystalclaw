@@ -1,6 +1,8 @@
 # ── Build stage ──
 FROM crystallang/crystal:1.19.1-alpine AS builder
 
+RUN apk add --no-cache libpq-dev
+
 WORKDIR /app
 
 # Copy dependency manifest first for layer caching
@@ -21,7 +23,8 @@ FROM alpine:3.21
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
-    su-exec
+    su-exec \
+    libpq
 
 # Create a non-root user
 RUN addgroup -S crystalclaw && adduser -S crystalclaw -G crystalclaw

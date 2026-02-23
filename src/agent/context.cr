@@ -1,10 +1,13 @@
+require "../memory/base"
+
 module CrystalClaw
   module Agent
     class ContextBuilder
       @workspace : String
       @tools_registry : Tools::ToolRegistry?
+      @memory_store : Memory::Store
 
-      def initialize(@workspace)
+      def initialize(@workspace, @memory_store)
       end
 
       def set_tools_registry(registry : Tools::ToolRegistry)
@@ -15,27 +18,27 @@ module CrystalClaw
         parts = [] of String
 
         # Load identity
-        identity = load_file("IDENTITY.md")
+        identity = @memory_store.get("IDENTITY.md")
         parts << identity unless identity.empty?
 
         # Load soul
-        soul = load_file("SOUL.md")
+        soul = @memory_store.get("SOUL.md")
         parts << soul unless soul.empty?
 
         # Load agent behavior
-        agent_md = load_file("AGENT.md")
+        agent_md = @memory_store.get("AGENT.md")
         parts << agent_md unless agent_md.empty?
 
         # Load user preferences
-        user = load_file("USER.md")
+        user = @memory_store.get("USER.md")
         parts << "## User Preferences\n#{user}" unless user.empty?
 
         # Load tools descriptions
-        tools_md = load_file("TOOLS.md")
+        tools_md = @memory_store.get("TOOLS.md")
         parts << tools_md unless tools_md.empty?
 
-        # Load memory
-        memory = load_file("memory/MEMORY.md")
+        # Load memory from configured store
+        memory = @memory_store.load
         parts << "## Memory\n#{memory}" unless memory.empty?
 
         # Load skills
@@ -54,15 +57,6 @@ module CrystalClaw
         parts << "Current time: #{Time.local.to_s("%Y-%m-%d %H:%M:%S %z")}"
 
         parts.join("\n\n")
-      end
-
-      private def load_file(relative_path : String) : String
-        path = File.join(@workspace, relative_path)
-        if File.exists?(path)
-          File.read(path).strip
-        else
-          ""
-        end
       end
 
       private def load_skills_prompt : String

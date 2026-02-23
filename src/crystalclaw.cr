@@ -30,6 +30,7 @@ require "./cron/service"
 require "./state/state"
 require "./skills/loader"
 require "./health/server"
+require "./memory/factory"
 
 module CrystalClaw
   VERSION  = "0.1.0"
@@ -271,7 +272,18 @@ module CrystalClaw
       end
     end
 
-    cfg = load_config
+    # Bootstrap: connect to PG and load config from database
+    postgres_url = ENV["CRYSTALCLAW_POSTGRES_URL"]?
+    if postgres_url && !postgres_url.empty?
+      store = Memory.create_pg_store(postgres_url)
+      cfg = Config.load_from_pg(store.db)
+      # Ensure postgres_url is set in config
+      cfg.memory.postgres_url = postgres_url
+    else
+      cfg = load_config
+      store = Memory.create_store(cfg)
+    end
+
     provider = Providers.create_provider(cfg)
     msg_bus = Bus::MessageBus.new
     agent_loop = Agent::AgentLoop.new(cfg, msg_bus, provider)
@@ -348,15 +360,14 @@ module CrystalClaw
       puts "⚠ Warning: No channels enabled"
     end
 
-    # Setup cron
-    cron_store = File.join(cfg.workspace_path, "cron", "jobs.json")
-    cron_service = Cron::Service.new(cron_store)
+    # Setup cron (uses memory store)
+    cron_service = Cron::Service.new(store)
     cron_service.start
     puts "✓ Cron service started"
 
-    # Setup heartbeat
+    # Setup heartbeat (uses memory store)
     heartbeat = Heartbeat::Service.new(
-      cfg.workspace_path,
+      store,
       cfg.heartbeat.interval,
       cfg.heartbeat.enabled
     )
@@ -444,11 +455,11 @@ module CrystalClaw
     end
 
     cfg = load_config
-    cron_store = File.join(cfg.workspace_path, "cron", "jobs.json")
+    store = Memory.create_store(cfg)
 
     case ARGV[1]
     when "list"
-      cs = Cron::Service.new(cron_store)
+      cs = Cron::Service.new(store)
       jobs = cs.list_jobs(include_disabled: true)
       if jobs.empty?
         puts "No scheduled jobs."
@@ -472,13 +483,13 @@ module CrystalClaw
         puts "    Status: #{status}"
       end
     when "add"
-      cron_add_cmd(cron_store)
+      cron_add_cmd(store)
     when "remove"
       if ARGV.size < 3
         puts "Usage: crystalclaw cron remove <job_id>"
         return
       end
-      cs = Cron::Service.new(cron_store)
+      cs = Cron::Service.new(store)
       if cs.remove_job(ARGV[2])
         puts "✓ Removed job #{ARGV[2]}"
       else
@@ -489,7 +500,7 @@ module CrystalClaw
         puts "Usage: crystalclaw cron enable <job_id>"
         return
       end
-      cs = Cron::Service.new(cron_store)
+      cs = Cron::Service.new(store)
       if job = cs.enable_job(ARGV[2], true)
         puts "✓ Job '#{job.name}' enabled"
       else
@@ -500,7 +511,7 @@ module CrystalClaw
         puts "Usage: crystalclaw cron disable <job_id>"
         return
       end
-      cs = Cron::Service.new(cron_store)
+      cs = Cron::Service.new(store)
       if job = cs.enable_job(ARGV[2], false)
         puts "✓ Job '#{job.name}' disabled"
       else
@@ -512,7 +523,7 @@ module CrystalClaw
     end
   end
 
-  private def self.cron_add_cmd(store_path : String)
+  private def self.cron_add_cmd(store : Memory::Store)
     name = ""
     message = ""
     every_sec : Int64? = nil
@@ -557,7 +568,7 @@ module CrystalClaw
                  Cron::CronSchedule.new(kind: "cron", expr: cron_expr)
                end
 
-    cs = Cron::Service.new(store_path)
+    cs = Cron::Service.new(store)
     job = cs.add_job(name, schedule, message)
     puts "✓ Added job '#{job.name}' (#{job.id})"
   end
@@ -629,7 +640,13 @@ module CrystalClaw
   # ── Config helpers ──
 
   private def self.load_config : Config
-    Config.load(Config.config_path)
+    # Check if PG URL is available for config loading
+    if (pg_url = ENV["CRYSTALCLAW_POSTGRES_URL"]?) && !pg_url.empty?
+      store = Memory.create_pg_store(pg_url)
+      Config.load_from_pg(store.db)
+    else
+      Config.load(Config.config_path)
+    end
   end
 end
 

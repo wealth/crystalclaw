@@ -53,12 +53,13 @@ module CrystalClaw
     end
 
     class Service
-      @store_path : String
+      CRON_KEY = "_cron/jobs"
+      @store : Memory::Store
       @jobs : Array(CronJob)
       @running : Bool
       @on_job : Proc(CronJob, String)?
 
-      def initialize(@store_path, @on_job = nil)
+      def initialize(@store, @on_job = nil)
         @jobs = load_jobs
         @running = false
       end
@@ -171,17 +172,17 @@ module CrystalClaw
       end
 
       private def load_jobs : Array(CronJob)
-        return [] of CronJob unless File.exists?(@store_path)
+        data = @store.get(CRON_KEY)
+        return [] of CronJob if data.empty?
         begin
-          Array(CronJob).from_json(File.read(@store_path))
+          Array(CronJob).from_json(data)
         rescue
           [] of CronJob
         end
       end
 
       private def save_jobs
-        Dir.mkdir_p(File.dirname(@store_path))
-        File.write(@store_path, @jobs.to_pretty_json)
+        @store.set(CRON_KEY, @jobs.to_pretty_json)
       end
 
       private def generate_id : String

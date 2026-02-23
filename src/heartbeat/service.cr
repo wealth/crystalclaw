@@ -4,13 +4,14 @@ require "../logger/logger"
 module CrystalClaw
   module Heartbeat
     class Service
-      @workspace : String
+      HEARTBEAT_KEY = "HEARTBEAT.md"
+      @store : Memory::Store
       @interval : Int32
       @enabled : Bool
       @running : Bool
       @handler : Proc(String, String, String, Nil)?
 
-      def initialize(@workspace, @interval = 30, @enabled = false)
+      def initialize(@store, @interval = 30, @enabled = false)
         @running = false
         @handler = nil
       end
@@ -37,7 +38,7 @@ module CrystalClaw
           next unless @running
 
           begin
-            prompt = load_heartbeat_prompt
+            prompt = @store.get(HEARTBEAT_KEY)
             next if prompt.empty?
 
             Logger.info("heartbeat", "Running heartbeat tasks")
@@ -46,15 +47,6 @@ module CrystalClaw
           rescue ex
             Logger.error("heartbeat", "Heartbeat error: #{ex.message}")
           end
-        end
-      end
-
-      private def load_heartbeat_prompt : String
-        path = File.join(@workspace, "HEARTBEAT.md")
-        if File.exists?(path)
-          File.read(path).strip
-        else
-          ""
         end
       end
     end

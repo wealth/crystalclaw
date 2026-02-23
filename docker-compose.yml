@@ -8,16 +8,39 @@ services:
     ports:
       - "18791:18791"
     volumes:
-      # Mount your host config into the container
-      - ~/.crystalclaw:/home/crystalclaw/.crystalclaw
+      # Optional: mount skills directory if using filesystem-based skills
+      # - ./workspace/skills:/home/crystalclaw/.crystalclaw/workspace/skills:ro
     environment:
-      # Override any config value via env vars (see src/config/config.cr)
-      - CRYSTALCLAW_AGENTS_DEFAULTS_MODEL=${CRYSTALCLAW_AGENTS_DEFAULTS_MODEL:-}
-      - CRYSTALCLAW_HEARTBEAT_ENABLED=${CRYSTALCLAW_HEARTBEAT_ENABLED:-false}
-      - CRYSTALCLAW_HEARTBEAT_INTERVAL=${CRYSTALCLAW_HEARTBEAT_INTERVAL:-30}
+      - CRYSTALCLAW_POSTGRES_URL=${CRYSTALCLAW_POSTGRES_URL:-}
+    depends_on:
+      postgres:
+        condition: service_started
+        required: false
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:18791/health" ]
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
+
+  # Optional: uncomment to use PostgreSQL backend
+  # Set CRYSTALCLAW_POSTGRES_URL=postgres://crystalclaw:crystalclaw@postgres:5432/crystalclaw
+  postgres:
+    image: postgres:16-alpine
+    container_name: crystalclaw-postgres
+    restart: unless-stopped
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_USER: crystalclaw
+      POSTGRES_PASSWORD: crystalclaw
+      POSTGRES_DB: crystalclaw
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:
+
+

@@ -16,19 +16,17 @@ module CrystalClaw
     end
 
     class Manager
-      @sessions_dir : String
+      SESSION_PREFIX = "_sessions/"
+      @store : Memory::Store
 
-      def initialize(workspace : String)
-        @sessions_dir = File.join(workspace, "sessions")
-        Dir.mkdir_p(@sessions_dir)
+      def initialize(@store)
       end
 
       def load_history(session_key : String) : Array(Providers::Message)
-        path = session_path(session_key)
-        return [] of Providers::Message unless File.exists?(path)
+        data = @store.get(session_store_key(session_key))
+        return [] of Providers::Message if data.empty?
 
         begin
-          data = File.read(path)
           entries = Array(SessionEntry).from_json(data)
           entries.map do |entry|
             tool_calls = if tc = entry.tool_calls
@@ -63,9 +61,7 @@ module CrystalClaw
           )
         end
 
-        path = session_path(session_key)
-        Dir.mkdir_p(File.dirname(path))
-        File.write(path, entries.to_json)
+        @store.set(session_store_key(session_key), entries.to_json)
       end
 
       def append_message(session_key : String, msg : Providers::Message)
@@ -79,23 +75,19 @@ module CrystalClaw
       end
 
       def clear_session(session_key : String)
-        path = session_path(session_key)
-        File.delete(path) if File.exists?(path)
+        @store.delete(session_store_key(session_key))
       end
 
       def list_sessions : Array(String)
-        sessions = [] of String
-        Dir.glob(File.join(@sessions_dir, "**", "*.json")) do |path|
-          rel = path.sub(@sessions_dir + "/", "").sub(".json", "")
-          sessions << rel
+        @store.list_keys(SESSION_PREFIX).map do |key|
+          key.sub(SESSION_PREFIX, "").sub(".json", "")
         end
-        sessions
       end
 
-      private def session_path(session_key : String) : String
-        # Convert session key like "cli:default" to "cli/default.json"
+      private def session_store_key(session_key : String) : String
+        # Convert session key like "cli:default" to "_sessions/cli/default"
         parts = session_key.split(":")
-        File.join(@sessions_dir, parts.join("/") + ".json")
+        SESSION_PREFIX + parts.join("/")
       end
     end
   end

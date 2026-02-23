@@ -1,4 +1,5 @@
 require "json"
+require "db"
 
 module CrystalClaw
   class Config
@@ -11,6 +12,7 @@ module CrystalClaw
     property tools : ToolsConfig = ToolsConfig.new
     property heartbeat : HeartbeatConfig = HeartbeatConfig.new
     property devices : DevicesConfig = DevicesConfig.new
+    property memory : MemoryConfig = MemoryConfig.new
 
     def initialize
     end
@@ -48,43 +50,46 @@ module CrystalClaw
       cfg
     end
 
+    CONFIG_PG_KEY = "_config"
+
     def self.load(path : String) : Config
       unless File.exists?(path)
         return self.default
       end
       data = File.read(path)
       cfg = Config.from_json(data)
-      apply_env_overrides(cfg)
       cfg
+    end
+
+    def self.load_from_pg(db : DB::Database) : Config
+      data = db.query_one?(
+        "SELECT content FROM workspace_data WHERE key = $1",
+        CONFIG_PG_KEY,
+        as: String
+      )
+      if data && !data.empty?
+        cfg = Config.from_json(data)
+      else
+        cfg = self.default
+        save_to_pg(db, cfg)
+      end
+      cfg
+    end
+
+    def self.save_to_pg(db : DB::Database, cfg : Config)
+      db.exec(
+        <<-SQL,
+        INSERT INTO workspace_data (key, content, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (key) DO UPDATE SET content = $2, updated_at = NOW()
+        SQL
+        CONFIG_PG_KEY, cfg.to_pretty_json
+      )
     end
 
     def self.save(path : String, cfg : Config)
       Dir.mkdir_p(File.dirname(path))
       File.write(path, cfg.to_pretty_json)
-    end
-
-    private def self.apply_env_overrides(cfg : Config)
-      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_WORKSPACE"]?) && !val.empty?
-        cfg.agents.defaults.workspace = val
-      end
-      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_MODEL"]?) && !val.empty?
-        cfg.agents.defaults.model = val
-      end
-      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_MAX_TOKENS"]?) && !val.empty?
-        cfg.agents.defaults.max_tokens = val.to_i
-      end
-      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_TEMPERATURE"]?) && !val.empty?
-        cfg.agents.defaults.temperature = val.to_f
-      end
-      if (val = ENV["CRYSTALCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"]?) && !val.empty?
-        cfg.agents.defaults.restrict_to_workspace = (val.downcase == "true")
-      end
-      if (val = ENV["CRYSTALCLAW_HEARTBEAT_ENABLED"]?) && !val.empty?
-        cfg.heartbeat.enabled = (val.downcase == "true")
-      end
-      if (val = ENV["CRYSTALCLAW_HEARTBEAT_INTERVAL"]?) && !val.empty?
-        cfg.heartbeat.interval = val.to_i
-      end
     end
   end
 
@@ -311,6 +316,14 @@ module CrystalClaw
     include JSON::Serializable
     property enabled : Bool = false
     property monitor_usb : Bool = false
+
+    def initialize
+    end
+  end
+
+  class MemoryConfig
+    include JSON::Serializable
+    property postgres_url : String = ""
 
     def initialize
     end

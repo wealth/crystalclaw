@@ -1,6 +1,7 @@
 require "./instance"
 require "../config/config"
 require "../providers/types"
+require "../memory/factory"
 
 module CrystalClaw
   module Agent
@@ -11,6 +12,9 @@ module CrystalClaw
       def initialize(cfg : Config)
         @agents = {} of String => Instance
         @default_id = "default"
+
+        # Create memory store from config
+        memory_store = Memory.create_store(cfg)
 
         # Create default agent from config defaults
         defaults = cfg.agents.defaults
@@ -23,7 +27,8 @@ module CrystalClaw
           max_tokens: defaults.max_tokens,
           temperature: defaults.temperature,
           max_tool_iterations: defaults.max_tool_iterations,
-          restrict_to_workspace: defaults.restrict_to_workspace
+          restrict_to_workspace: defaults.restrict_to_workspace,
+          memory_store: memory_store
         )
         default_agent.register_default_tools
         @agents["default"] = default_agent
@@ -44,7 +49,8 @@ module CrystalClaw
             max_tokens: defaults.max_tokens,
             temperature: defaults.temperature,
             max_tool_iterations: defaults.max_tool_iterations,
-            restrict_to_workspace: defaults.restrict_to_workspace
+            restrict_to_workspace: defaults.restrict_to_workspace,
+            memory_store: memory_store
           )
           agent.register_default_tools
           @agents[id] = agent

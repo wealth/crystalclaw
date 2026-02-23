@@ -1,6 +1,7 @@
 require "./context"
 require "../tools/base"
 require "../session/manager"
+require "../memory/base"
 
 module CrystalClaw
   module Agent
@@ -17,6 +18,7 @@ module CrystalClaw
       property tools : Tools::ToolRegistry
       property context_builder : ContextBuilder
       property session_manager : Session::Manager
+      property memory_store : Memory::Store
 
       def initialize(
         @id = "default",
@@ -28,13 +30,14 @@ module CrystalClaw
         @temperature = 0.7,
         @max_tool_iterations = 20,
         @restrict_to_workspace = true,
+        memory_store : Memory::Store? = nil,
       )
         ws = @workspace.sub("~", Path.home.to_s)
         @workspace = ws
-        Dir.mkdir_p(ws)
         @tools = Tools::ToolRegistry.new
-        @context_builder = ContextBuilder.new(ws)
-        @session_manager = Session::Manager.new(ws)
+        @memory_store = memory_store || Memory::FileStore.new(ws)
+        @context_builder = ContextBuilder.new(ws, @memory_store)
+        @session_manager = Session::Manager.new(@memory_store)
       end
 
       def register_default_tools

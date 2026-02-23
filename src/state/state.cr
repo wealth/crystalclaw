@@ -3,13 +3,10 @@ require "json"
 module CrystalClaw
   module State
     class Manager
-      @state_dir : String
-      @state_file : String
+      STATE_KEY = "_state"
+      @store : Memory::Store
 
-      def initialize(workspace : String)
-        @state_dir = File.join(workspace, "state")
-        @state_file = File.join(@state_dir, "state.json")
-        Dir.mkdir_p(@state_dir)
+      def initialize(@store)
       end
 
       def set_last_channel(channel : String)
@@ -43,19 +40,17 @@ module CrystalClaw
       end
 
       private def load_state : Hash(String, JSON::Any)
-        if File.exists?(@state_file)
-          begin
-            JSON.parse(File.read(@state_file)).as_h
-          rescue
-            {} of String => JSON::Any
-          end
-        else
+        raw = @store.get(STATE_KEY)
+        return {} of String => JSON::Any if raw.empty?
+        begin
+          JSON.parse(raw).as_h
+        rescue
           {} of String => JSON::Any
         end
       end
 
       private def save_state(data : Hash(String, JSON::Any))
-        File.write(@state_file, data.to_pretty_json)
+        @store.set(STATE_KEY, data.to_pretty_json)
       end
     end
   end
