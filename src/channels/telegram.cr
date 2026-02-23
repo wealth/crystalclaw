@@ -140,9 +140,8 @@ module CrystalClaw
       end
 
       def edit_message(chat_id : String, message_id : Int64, text : String)
-        html = markdown_to_telegram_html(text)
-        # Split long messages — edit only the first chunk, send rest as new
-        chunks = split_message(html, 4096)
+        escaped = escape_markdown_v2(text)
+        chunks = split_message(escaped, 4096)
 
         # Edit the thinking message with the first chunk
         edit_url = "https://api.telegram.org/bot#{@token}/editMessageText"
@@ -150,7 +149,7 @@ module CrystalClaw
           "chat_id"    => chat_id,
           "message_id" => message_id,
           "text"       => chunks[0],
-          "parse_mode" => "HTML",
+          "parse_mode" => "MarkdownV2",
         }.to_json
 
         begin
@@ -163,13 +162,12 @@ module CrystalClaw
             body_plain = {
               "chat_id"    => chat_id,
               "message_id" => message_id,
-              "text"       => text,
+              "text"       => strip_markdown(text),
             }.to_json
             response = HTTP::Client.post(edit_url,
               headers: HTTP::Headers{"Content-Type" => "application/json"},
               body: body_plain
             )
-            # If edit still fails, fall back to sendMessage
             unless response.success?
               send_message(chat_id, text)
               return
@@ -184,27 +182,26 @@ module CrystalClaw
         # Send remaining chunks as new messages
         if chunks.size > 1
           chunks[1..].each do |chunk|
-            send_single_chunk_raw(chat_id, chunk)
+            send_single_chunk(chat_id, chunk)
           end
         end
       end
 
       def send_message(chat_id : String, text : String)
-        html = markdown_to_telegram_html(text)
-        # Split long messages (Telegram limit: 4096 chars)
-        chunks = split_message(html, 4096)
+        escaped = escape_markdown_v2(text)
+        chunks = split_message(escaped, 4096)
         chunks.each do |chunk|
-          send_single_chunk_raw(chat_id, chunk)
+          send_single_chunk(chat_id, chunk)
         end
       end
 
-      # Send a chunk that is already converted to HTML
-      private def send_single_chunk_raw(chat_id : String, html_chunk : String)
+      # Send a chunk that is already escaped for MarkdownV2
+      private def send_single_chunk(chat_id : String, chunk : String)
         url = "https://api.telegram.org/bot#{@token}/sendMessage"
         body = {
           "chat_id"    => chat_id,
-          "text"       => html_chunk,
-          "parse_mode" => "HTML",
+          "text"       => chunk,
+          "parse_mode" => "MarkdownV2",
         }.to_json
 
         begin
@@ -213,11 +210,10 @@ module CrystalClaw
             body: body
           )
           unless response.success?
-            # Retry as plain text (strip HTML tags)
-            plain = html_chunk.gsub(/<[^>]*>/, "")
+            # Retry as plain text (strip markdown)
             body_plain = {
               "chat_id" => chat_id,
-              "text"    => plain,
+              "text"    => strip_markdown(chunk),
             }.to_json
             HTTP::Client.post(url,
               headers: HTTP::Headers{"Content-Type" => "application/json"},
@@ -229,202 +225,167 @@ module CrystalClaw
         end
       end
 
-      # Convert standard Markdown to Telegram-compatible HTML.
-      # Handles: headers, bold, italic, code blocks, inline code, tables, lists.
-      private def markdown_to_telegram_html(text : String) : String
-        lines = text.split('\n')
-        result = [] of String
+      # Escape special characters for Telegram MarkdownV2.
+      # Preserves markdown formatting (bold, italic, code, links) but escapes
+      # special chars in plain text segments so Telegram doesn't reject the message.
+      private def escape_markdown_v2(text : String) : String
+        result = String::Builder.new
         i = 0
+        lines = text.split('\n')
+        line_idx = 0
 
-        while i < lines.size
-          line = lines[i]
+        while line_idx < lines.size
+          line = lines[line_idx]
 
-          # Fenced code blocks (```...```)
+          # Fenced code blocks — pass through, only escape ` and \ inside
           if line.strip.starts_with?("```")
-            lang = line.strip.lchop("```").strip
-            code_lines = [] of String
-            i += 1
-            while i < lines.size && !lines[i].strip.starts_with?("```")
-              code_lines << escape_html(lines[i])
-              i += 1
+            result << line << '\n'
+            line_idx += 1
+            while line_idx < lines.size && !lines[line_idx].strip.starts_with?("```")
+              result << lines[line_idx] << '\n'
+              line_idx += 1
             end
-            i += 1 # skip closing ```
-            if lang.empty?
-              result << "<pre>#{code_lines.join('\n')}</pre>"
-            else
-              result << "<pre><code class=\"language-#{escape_html(lang)}\">#{code_lines.join('\n')}</code></pre>"
+            if line_idx < lines.size
+              result << lines[line_idx] # closing ```
+              result << '\n' if line_idx + 1 < lines.size
+              line_idx += 1
             end
             next
           end
 
-          # Markdown table: collect all consecutive | lines, parse and align
-          if line.strip.starts_with?("|") && line.strip.ends_with?("|")
-            rows = [] of Array(String)
-            while i < lines.size && lines[i].strip.starts_with?("|") && lines[i].strip.ends_with?("|")
-              row = lines[i].strip
-              # Skip separator rows (|---|---|)
-              unless row.gsub(/[|\-:\s]/, "").empty?
-                cells = row.split('|').map(&.strip)
-                # Remove empty first/last from leading/trailing |
-                cells.shift if cells.first?.try(&.empty?)
-                cells.pop if cells.last?.try(&.empty?)
-                rows << cells
-              end
-              i += 1
-            end
-
-            unless rows.empty?
-              # Calculate max width per column
-              col_count = rows.map(&.size).max
-              col_widths = Array.new(col_count, 0)
-              rows.each do |cells|
-                cells.each_with_index do |cell, ci|
-                  col_widths[ci] = {col_widths[ci], cell.size}.max
-                end
-              end
-
-              # Render aligned table
-              formatted = rows.map do |cells|
-                cells.map_with_index do |cell, ci|
-                  cell.ljust(col_widths[ci])
-                end.join("  ")
-              end.join('\n')
-
-              result << "<pre>#{escape_html(formatted)}</pre>"
-            end
-            next
-          end
-
-          # Headers: ### heading → bold
-          if line =~ /^(\#{1,6})\s+(.+)$/
-            heading_text = $2.strip
-            result << "<b>#{format_inline(heading_text)}</b>"
-            i += 1
-            next
-          end
-
-          # Unordered list items: - item or * item
-          if line =~ /^(\s*)[*\-]\s+(.+)$/
-            indent = $1.size // 2
-            prefix = "  " * indent + "• "
-            result << "#{prefix}#{format_inline($2)}"
-            i += 1
-            next
-          end
-
-          # Ordered list items: 1. item
-          if line =~ /^(\s*)(\d+)\.\s+(.+)$/
-            indent = $1.size // 2
-            prefix = "  " * indent + "#{$2}. "
-            result << "#{prefix}#{format_inline($3)}"
-            i += 1
-            next
-          end
-
-          # Regular line
-          result << format_inline(line)
-          i += 1
+          # Regular line — escape special chars outside of inline formatting
+          result << escape_line_markdown_v2(line)
+          result << '\n' if line_idx + 1 < lines.size
+          line_idx += 1
         end
 
-        result.join('\n')
+        result.to_s
       end
 
-      # Format inline markdown elements: bold, italic, inline code, links
-      private def format_inline(text : String) : String
+      # Escape a single line for MarkdownV2, preserving inline formatting
+      private def escape_line_markdown_v2(line : String) : String
         result = String::Builder.new
         i = 0
 
-        while i < text.size
-          # Inline code `...`
-          if text[i] == '`'
-            end_pos = text.index('`', i + 1)
+        while i < line.size
+          # Inline code `...` — pass through, content doesn't need escaping
+          if line[i] == '`'
+            end_pos = line.index('`', i + 1)
             if end_pos
-              code_content = text[(i + 1)...end_pos]
-              result << "<code>#{escape_html(code_content)}</code>"
+              result << line[i..end_pos]
               i = end_pos + 1
               next
             end
           end
 
-          # Markdown links [text](url)
-          if text[i] == '['
-            close_bracket = text.index(']', i + 1)
-            if close_bracket && close_bracket + 1 < text.size && text[close_bracket + 1] == '('
-              close_paren = text.index(')', close_bracket + 2)
+          # Markdown links [text](url) — escape text part, pass url through
+          if line[i] == '['
+            close_bracket = line.index(']', i + 1)
+            if close_bracket && close_bracket + 1 < line.size && line[close_bracket + 1] == '('
+              close_paren = line.index(')', close_bracket + 2)
               if close_paren
-                link_text = text[(i + 1)...close_bracket]
-                link_url = text[(close_bracket + 2)...close_paren]
-                result << "<a href=\"#{escape_html(link_url)}\">#{escape_html(link_text)}</a>"
+                link_text = line[(i + 1)...close_bracket]
+                link_url = line[(close_bracket + 2)...close_paren]
+                result << '[' << escape_plain_text_v2(link_text) << "](" << link_url << ')'
                 i = close_paren + 1
                 next
               end
             end
           end
 
-          # Bold **text** or __text__
-          if i + 1 < text.size && text[i] == '*' && text[i + 1] == '*'
-            end_pos = text.index("**", i + 2)
+          # Bold **text**
+          if i + 1 < line.size && line[i] == '*' && line[i + 1] == '*'
+            end_pos = line.index("**", i + 2)
             if end_pos
-              bold_content = text[(i + 2)...end_pos]
-              result << "<b>#{escape_html(bold_content)}</b>"
+              content = line[(i + 2)...end_pos]
+              result << "**" << escape_plain_text_v2(content) << "**"
               i = end_pos + 2
               next
             end
           end
 
-          if i + 1 < text.size && text[i] == '_' && text[i + 1] == '_'
-            end_pos = text.index("__", i + 2)
+          # Bold __text__
+          if i + 1 < line.size && line[i] == '_' && line[i + 1] == '_'
+            end_pos = line.index("__", i + 2)
             if end_pos
-              bold_content = text[(i + 2)...end_pos]
-              result << "<b>#{escape_html(bold_content)}</b>"
+              content = line[(i + 2)...end_pos]
+              result << "__" << escape_plain_text_v2(content) << "__"
               i = end_pos + 2
-              next
-            end
-          end
-
-          # Italic *text* or _text_ (single)
-          if text[i] == '*' && (i + 1 < text.size && text[i + 1] != '*')
-            end_pos = text.index('*', i + 1)
-            if end_pos && end_pos > i + 1
-              italic_content = text[(i + 1)...end_pos]
-              result << "<i>#{escape_html(italic_content)}</i>"
-              i = end_pos + 1
-              next
-            end
-          end
-
-          if text[i] == '_' && (i + 1 < text.size && text[i + 1] != '_')
-            end_pos = text.index('_', i + 1)
-            if end_pos && end_pos > i + 1
-              italic_content = text[(i + 1)...end_pos]
-              result << "<i>#{escape_html(italic_content)}</i>"
-              i = end_pos + 1
               next
             end
           end
 
           # Strikethrough ~~text~~
-          if i + 1 < text.size && text[i] == '~' && text[i + 1] == '~'
-            end_pos = text.index("~~", i + 2)
+          if i + 1 < line.size && line[i] == '~' && line[i + 1] == '~'
+            end_pos = line.index("~~", i + 2)
             if end_pos
-              strike_content = text[(i + 2)...end_pos]
-              result << "<s>#{escape_html(strike_content)}</s>"
+              content = line[(i + 2)...end_pos]
+              result << "~~" << escape_plain_text_v2(content) << "~~"
               i = end_pos + 2
               next
             end
           end
 
-          # Regular character — escape HTML
-          result << escape_html(text[i].to_s)
+          # Italic *text* (single, not **)
+          if line[i] == '*' && (i + 1 < line.size && line[i + 1] != '*')
+            end_pos = line.index('*', i + 1)
+            if end_pos && end_pos > i + 1
+              content = line[(i + 1)...end_pos]
+              result << '*' << escape_plain_text_v2(content) << '*'
+              i = end_pos + 1
+              next
+            end
+          end
+
+          # Italic _text_ (single, not __)
+          if line[i] == '_' && (i + 1 < line.size && line[i + 1] != '_')
+            end_pos = line.index('_', i + 1)
+            if end_pos && end_pos > i + 1
+              content = line[(i + 1)...end_pos]
+              result << '_' << escape_plain_text_v2(content) << '_'
+              i = end_pos + 1
+              next
+            end
+          end
+
+          # Plain character — escape if special
+          result << escape_char_v2(line[i])
           i += 1
         end
 
         result.to_s
       end
 
-      # Escape HTML special characters
-      private def escape_html(text : String) : String
-        text.gsub('&', "&amp;").gsub('<', "&lt;").gsub('>', "&gt;")
+      # Escape a single character for MarkdownV2 plain text context
+      private def escape_char_v2(c : Char) : String
+        case c
+        when '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!', '\\'
+          "\\#{c}"
+        else
+          c.to_s
+        end
+      end
+
+      # Escape all MarkdownV2 special chars in a plain text string
+      private def escape_plain_text_v2(text : String) : String
+        result = String::Builder.new
+        text.each_char { |c| result << escape_char_v2(c) }
+        result.to_s
+      end
+
+      # Strip markdown formatting for plain-text fallback
+      private def strip_markdown(text : String) : String
+        text
+          .gsub(/```[\s\S]*?```/) { |m| m.gsub("```", "") } # code blocks
+          .gsub(/`([^`]+)`/, "\\1")                         # inline code
+          .gsub(/\*\*([^*]+)\*\*/, "\\1")                   # bold
+          .gsub(/__([^_]+)__/, "\\1")                       # bold
+          .gsub(/\*([^*]+)\*/, "\\1")                       # italic
+          .gsub(/_([^_]+)_/, "\\1")                         # italic
+          .gsub(/~~([^~]+)~~/, "\\1")                       # strikethrough
+          .gsub(/\[([^\]]+)\]\([^)]+\)/, "\\1")             # links
+          .gsub(/^\#{1,6}\s+/, "")                          # headers
+          .gsub(/\\(.)/, "\\1")                             # unescape
       end
 
       private def split_message(text : String, max_length : Int32) : Array(String)
