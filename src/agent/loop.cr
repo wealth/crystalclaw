@@ -14,6 +14,7 @@ require "../tools/edit"
 require "../tools/shell"
 require "../tools/web"
 require "../tools/message"
+require "../tools/config"
 
 module CrystalClaw
   module Agent
@@ -30,6 +31,32 @@ module CrystalClaw
 
         # Register shared tools to all agents
         register_shared_tools
+      end
+
+      # Reinitialize from database — reload config and rebuild registry
+      def reinitialize : String
+        pg_url = ENV["CRYSTALCLAW_POSTGRES_URL"]?
+        unless pg_url && !pg_url.empty?
+          return "Cannot reinitialize: CRYSTALCLAW_POSTGRES_URL not set"
+        end
+
+        store = Memory.create_pg_store(pg_url)
+        new_cfg = Config.load_from_pg(store.db)
+        new_cfg.memory.postgres_url = pg_url
+        @cfg = new_cfg
+        @registry = Registry.new(@cfg)
+        register_shared_tools
+
+        agent = @registry.get_default_agent
+        lines = [] of String
+        lines << "✓ Configuration reloaded from database"
+        lines << "  • Model: #{@cfg.agents.defaults.model}"
+        lines << "  • Tools: #{agent.tools.size} loaded"
+        lines << "  • Telegram: #{@cfg.channels.telegram.enabled ? "enabled" : "disabled"}"
+        lines << "  • Discord: #{@cfg.channels.discord.enabled ? "enabled" : "disabled"}"
+        lines << "  • Max Messenger: #{@cfg.channels.max_messenger.enabled ? "enabled" : "disabled"}"
+        lines << "  • Heartbeat: #{@cfg.heartbeat.enabled ? "enabled" : "disabled"}"
+        lines.join("\n")
       end
 
       def register_tool(tool : Tools::Tool)
@@ -119,6 +146,14 @@ module CrystalClaw
           ))
         end
         @registry.register_tool_to_all(msg_tool)
+
+        # Config management tools
+        pg_url = ENV["CRYSTALCLAW_POSTGRES_URL"]?
+        if pg_url && !pg_url.empty?
+          db = Memory.create_pg_store(pg_url).db
+          @registry.register_tool_to_all(Tools::UpdateConfigTool.new(db))
+          @registry.register_tool_to_all(Tools::ReinitializeTool.new { reinitialize })
+        end
       end
 
       private def process_message(msg : Bus::InboundMessage) : String

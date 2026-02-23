@@ -15,6 +15,7 @@ require "./tools/edit"
 require "./tools/shell"
 require "./tools/web"
 require "./tools/message"
+require "./tools/config"
 require "./agent/context"
 require "./agent/instance"
 require "./agent/registry"
@@ -110,11 +111,6 @@ module CrystalClaw
     create_workspace_templates(workspace)
 
     puts "#{LOGO} crystalclaw is ready!"
-    puts
-    puts "Next steps:"
-    puts "  1. Add your API key to #{config_path}"
-    puts "     Get one at: https://openrouter.ai/keys"
-    puts "  2. Chat: crystalclaw agent -m \"Hello!\""
   end
 
   private def self.create_workspace_templates(workspace : String)
