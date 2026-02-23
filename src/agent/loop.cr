@@ -41,7 +41,7 @@ module CrystalClaw
         end
 
         store = Memory.create_pg_store(pg_url)
-        new_cfg = Config.load_from_pg(store.db)
+        new_cfg = Config.load_from_store(store)
         new_cfg.memory.postgres_url = pg_url
         @cfg = new_cfg
         @registry = Registry.new(@cfg)
@@ -150,10 +150,18 @@ module CrystalClaw
         # Config management tools
         pg_url = ENV["CRYSTALCLAW_POSTGRES_URL"]?
         if pg_url && !pg_url.empty?
-          db = Memory.create_pg_store(pg_url).db
-          @registry.register_tool_to_all(Tools::UpdateConfigTool.new(db))
+          store = Memory.create_pg_store(pg_url)
+          @registry.register_tool_to_all(Tools::UpdateConfigTool.new(store))
           @registry.register_tool_to_all(Tools::ReinitializeTool.new { reinitialize })
         end
+
+        # Prompt management tools (one per prompt file)
+        memory_store = @registry.get_default_agent.memory_store
+        @registry.register_tool_to_all(Tools::UpdateIdentityTool.new(memory_store))
+        @registry.register_tool_to_all(Tools::UpdateSoulTool.new(memory_store))
+        @registry.register_tool_to_all(Tools::UpdateAgentTool.new(memory_store))
+        @registry.register_tool_to_all(Tools::UpdateUserTool.new(memory_store))
+        @registry.register_tool_to_all(Tools::UpdateMemoryTool.new(memory_store))
       end
 
       private def process_message(msg : Bus::InboundMessage) : String

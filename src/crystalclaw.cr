@@ -272,7 +272,7 @@ module CrystalClaw
     postgres_url = ENV["CRYSTALCLAW_POSTGRES_URL"]?
     if postgres_url && !postgres_url.empty?
       store = Memory.create_pg_store(postgres_url)
-      cfg = Config.load_from_pg(store.db)
+      cfg = Config.load_from_store(store)
       # Ensure postgres_url is set in config
       cfg.memory.postgres_url = postgres_url
     else
@@ -639,7 +639,7 @@ module CrystalClaw
     # Check if PG URL is available for config loading
     if (pg_url = ENV["CRYSTALCLAW_POSTGRES_URL"]?) && !pg_url.empty?
       store = Memory.create_pg_store(pg_url)
-      Config.load_from_pg(store.db)
+      Config.load_from_store(store)
     else
       Config.load(Config.config_path)
     end

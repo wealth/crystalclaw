@@ -101,7 +101,7 @@ module CrystalClaw
         end
 
         @jobs << job
-        save_jobs
+        save_job(job)
         job
       end
 
@@ -109,7 +109,7 @@ module CrystalClaw
         initial_size = @jobs.size
         @jobs.reject! { |j| j.id == job_id }
         if @jobs.size < initial_size
-          save_jobs
+          @store.delete_cron_job(job_id)
           true
         else
           false
@@ -120,7 +120,7 @@ module CrystalClaw
         job = @jobs.find { |j| j.id == job_id }
         if job
           job.enabled = enabled
-          save_jobs
+          save_job(job)
         end
         job
       end
@@ -163,7 +163,7 @@ module CrystalClaw
                 job.enabled = false
               end
 
-              save_jobs
+              save_job(job)
             rescue ex
               Logger.error("cron", "Job #{job.name} error: #{ex.message}")
             end
@@ -172,17 +172,20 @@ module CrystalClaw
       end
 
       private def load_jobs : Array(CronJob)
-        data = @store.get(CRON_KEY)
-        return [] of CronJob if data.empty?
-        begin
-          Array(CronJob).from_json(data)
-        rescue
-          [] of CronJob
+        jobs = [] of CronJob
+        @store.list_cron_jobs.each do |tuple|
+          id, content = tuple
+          begin
+            jobs << CronJob.from_json(content)
+          rescue
+            # Skip invalid jobs
+          end
         end
+        jobs
       end
 
-      private def save_jobs
-        @store.set(CRON_KEY, @jobs.to_pretty_json)
+      private def save_job(job : CronJob)
+        @store.set_cron_job(job.id, job.to_json)
       end
 
       private def generate_id : String

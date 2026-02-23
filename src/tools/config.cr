@@ -2,15 +2,16 @@ require "json"
 require "db"
 require "./base"
 require "../config/config"
+require "../memory/base"
 
 module CrystalClaw
   module Tools
     # ── Config Management Tools ──
 
     class UpdateConfigTool < Tool
-      @db : DB::Database
+      @store : Memory::Store
 
-      def initialize(@db)
+      def initialize(@store)
       end
 
       def name : String
@@ -42,74 +43,22 @@ module CrystalClaw
         key = args["key"]?.try(&.as_s?) || return ToolResult.error("Missing 'key' argument")
         value_str = args["value"]?.try(&.as_s?) || return ToolResult.error("Missing 'value' argument")
 
-        # Load current config JSON from DB
-        data = @db.query_one?(
-          "SELECT content FROM workspace_data WHERE key = $1",
-          Config::CONFIG_PG_KEY,
-          as: String
-        )
-
-        config_json = if data && !data.empty?
-                        JSON.parse(data)
-                      else
-                        # Start from default config
-                        JSON.parse(Config.default.to_json)
-                      end
-
-        # Parse the value
+        # Load current config JSON from store
+        # Here we just re-build the whole json config to set a nested value, then save everything.
+        # But wait, with dot paths we can just set the single value natively!
         parsed_value = begin
           JSON.parse(value_str)
         rescue
           JSON::Any.new(value_str)
         end
 
-        # Navigate the dot path and set the value
-        parts = key.split(".")
-        if parts.empty?
-          return ToolResult.error("Invalid key: empty path")
-        end
-
         begin
-          set_nested_value(config_json, parts, parsed_value)
+          @store.set_config(key, parsed_value.to_json)
         rescue ex
           return ToolResult.error("Failed to set config key '#{key}': #{ex.message}")
         end
 
-        # Save back to DB
-        @db.exec(
-          <<-SQL,
-          INSERT INTO workspace_data (key, content, updated_at)
-          VALUES ($1, $2, NOW())
-          ON CONFLICT (key) DO UPDATE SET content = $2, updated_at = NOW()
-          SQL
-          Config::CONFIG_PG_KEY, config_json.to_pretty_json
-        )
-
         ToolResult.success("Successfully updated config key '#{key}' to: #{parsed_value.to_json}. Use the reinitialize tool to apply changes.")
-      end
-
-      private def set_nested_value(root : JSON::Any, parts : Array(String), value : JSON::Any)
-        current = root.as_h? || raise "Config root is not an object"
-
-        # Navigate to the parent of the target key
-        parts[0..-2].each_with_index do |part, i|
-          child = current[part]?
-          unless child
-            raise "Key path segment '#{parts[0..i].join(".")}' not found in config"
-          end
-          current = child.as_h? || raise "Key path segment '#{parts[0..i].join(".")}' is not an object"
-        end
-
-        # Set the final key
-        last_key = parts.last
-        unless current.has_key?(last_key)
-          raise "Key '#{key_path(parts)}' not found in config. Available keys at '#{key_path(parts[0..-2])}': #{current.keys.join(", ")}"
-        end
-        current[last_key] = value
-      end
-
-      private def key_path(parts : Array(String)) : String
-        parts.join(".")
       end
     end
 
@@ -140,5 +89,72 @@ module CrystalClaw
         end
       end
     end
+
+    # ── Prompt Update Tools (one per prompt file) ──
+
+    macro define_prompt_tool(class_name, tool_name, store_key, description)
+      class {{class_name}} < Tool
+        @store : Memory::Store
+
+        def initialize(@store)
+        end
+
+        def name : String
+          {{tool_name}}
+        end
+
+        def description : String
+          {{description}}
+        end
+
+        def parameters : Hash(String, JSON::Any)
+          JSON.parse(%({
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string",
+                "description": "The new markdown content. This replaces the entire file."
+              }
+            },
+            "required": ["content"]
+          })).as_h
+        end
+
+        def execute(args : Hash(String, JSON::Any)) : ToolResult
+          content = args["content"]?.try(&.as_s?) || return ToolResult.error("Missing 'content' argument")
+          begin
+            @store.set({{store_key}}, content)
+            ToolResult.success("Successfully updated #{{{store_key}}} (#{content.bytesize} bytes). Changes take effect on the next message.")
+          rescue ex
+            ToolResult.error("Failed to update #{{{store_key}}}: #{ex.message}")
+          end
+        end
+      end
+    end
+
+    define_prompt_tool(
+      UpdateIdentityTool, "update_identity", "IDENTITY.md",
+      "Update the agent's identity prompt (IDENTITY.md). This defines who the agent is, its name, and core traits."
+    )
+
+    define_prompt_tool(
+      UpdateSoulTool, "update_soul", "SOUL.md",
+      "Update the agent's soul prompt (SOUL.md). This defines the agent's deeper personality and values."
+    )
+
+    define_prompt_tool(
+      UpdateAgentTool, "update_agent", "AGENT.md",
+      "Update the agent behavior prompt (AGENT.md). This defines behavior guidelines, rules, and how the agent should act."
+    )
+
+    define_prompt_tool(
+      UpdateUserTool, "update_user", "USER.md",
+      "Update the user preferences prompt (USER.md). This stores user preferences like language, response style, and personal details."
+    )
+
+    define_prompt_tool(
+      UpdateMemoryTool, "update_memory", "memory/MEMORY.md",
+      "Update the agent's long-term memory (memory/MEMORY.md). This stores important facts and information across sessions."
+    )
   end
 end

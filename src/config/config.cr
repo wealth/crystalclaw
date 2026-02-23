@@ -1,6 +1,14 @@
 require "json"
 require "db"
 
+# Forward declaration so we don't need to require memory/base directly here and risk circles
+module CrystalClaw
+  module Memory
+    abstract class Store
+    end
+  end
+end
+
 module CrystalClaw
   class Config
     include JSON::Serializable
@@ -61,30 +69,57 @@ module CrystalClaw
       cfg
     end
 
-    def self.load_from_pg(db : DB::Database) : Config
-      data = db.query_one?(
-        "SELECT content FROM workspace_data WHERE key = $1",
-        CONFIG_PG_KEY,
-        as: String
-      )
-      if data && !data.empty?
-        cfg = Config.from_json(data)
-      else
+    def self.load_from_store(store : Memory::Store) : Config
+      all_config = store.get_all_config
+      if all_config.empty?
         cfg = self.default
-        save_to_pg(db, cfg)
+        save_to_store(store, cfg)
+        return cfg
       end
-      cfg
+
+      # Construct JSON payload from flat dot-notation keys
+      root = {} of String => JSON::Any
+      all_config.each do |key, value_str|
+        parts = key.split(".")
+        current = root
+        parts[0...-1].each do |part|
+          current[part] ||= JSON::Any.new({} of String => JSON::Any)
+          current = current[part].as_h
+        end
+
+        val = begin
+          JSON.parse(value_str)
+        rescue
+          JSON::Any.new(value_str)
+        end
+        current[parts.last] = val
+      end
+
+      Config.from_json(root.to_json)
     end
 
-    def self.save_to_pg(db : DB::Database, cfg : Config)
-      db.exec(
-        <<-SQL,
-        INSERT INTO workspace_data (key, content, updated_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (key) DO UPDATE SET content = $2, updated_at = NOW()
-        SQL
-        CONFIG_PG_KEY, cfg.to_pretty_json
-      )
+    def self.save_to_store(store : Memory::Store, cfg : Config)
+      json = JSON.parse(cfg.to_json)
+      flatten_json("", json).each do |k, v|
+        store.set_config(k, v.to_json)
+      end
+    end
+
+    def self.flatten_json(prefix : String, json : JSON::Any) : Hash(String, JSON::Any)
+      result = {} of String => JSON::Any
+      if json.as_h?
+        json.as_h.each do |k, v|
+          new_prefix = prefix.empty? ? k : "#{prefix}.#{k}"
+          if v.as_h?
+            result.merge!(flatten_json(new_prefix, v))
+          else
+            result[new_prefix] = v
+          end
+        end
+      else
+        result[prefix] = json
+      end
+      result
     end
 
     def self.save(path : String, cfg : Config)

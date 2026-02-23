@@ -23,7 +23,7 @@ module CrystalClaw
       end
 
       def load_history(session_key : String) : Array(Providers::Message)
-        data = @store.get(session_store_key(session_key))
+        data = @store.get_session(session_key)
         return [] of Providers::Message if data.empty?
 
         begin
@@ -61,7 +61,7 @@ module CrystalClaw
           )
         end
 
-        @store.set(session_store_key(session_key), entries.to_json)
+        @store.set_session(session_key, entries.to_json)
       end
 
       def append_message(session_key : String, msg : Providers::Message)
@@ -75,19 +75,11 @@ module CrystalClaw
       end
 
       def clear_session(session_key : String)
-        @store.delete(session_store_key(session_key))
+        @store.delete_session(session_key)
       end
 
       def list_sessions : Array(String)
-        @store.list_keys(SESSION_PREFIX).map do |key|
-          key.sub(SESSION_PREFIX, "").sub(".json", "")
-        end
-      end
-
-      private def session_store_key(session_key : String) : String
-        # Convert session key like "cli:default" to "_sessions/cli/default"
-        parts = session_key.split(":")
-        SESSION_PREFIX + parts.join("/")
+        @store.list_session_keys
       end
     end
   end
