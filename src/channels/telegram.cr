@@ -221,10 +221,11 @@ module CrystalClaw
 
         builder.finish
         boundary = builder.boundary
+        io.rewind
 
         HTTP::Client.post(url,
           headers: HTTP::Headers{"Content-Type" => "multipart/form-data; boundary=#{boundary}"},
-          body: io.to_s
+          body: io
         )
       end
 
@@ -263,10 +264,11 @@ module CrystalClaw
           builder.field("media", media_payload.to_json)
           builder.finish
           boundary = builder.boundary
+          io.rewind
 
           HTTP::Client.post(url,
             headers: HTTP::Headers{"Content-Type" => "multipart/form-data; boundary=#{boundary}"},
-            body: io.to_s
+            body: io
           )
         ensure
           files_to_close.each(&.close)
