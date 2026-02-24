@@ -1,7 +1,7 @@
 # ── Build stage ──
-FROM crystallang/crystal:1.19.1-alpine AS builder
+FROM crystallang/crystal:1.19.1 AS builder
 
-RUN apk add --no-cache libpq-dev
+RUN apt-get update && apt-get install -y libpq-dev
 
 WORKDIR /app
 
@@ -14,24 +14,32 @@ RUN shards install --production
 COPY src/ src/
 COPY workspace/ workspace/
 
-# Build a statically-linked release binary
-RUN shards build --release --static --no-debug
+# Build a dynamically-linked release binary
+RUN shards build --release --no-debug
 
 # ── Runtime stage ──
-FROM alpine:3.21
+FROM ubuntu:24.04
 
-RUN apk add --no-cache \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     tzdata \
-    su-exec \
-    libpq \
-    sudo
+    gosu \
+    libpq5 \
+    sudo \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and allow passwordless sudo
-RUN addgroup -S crystalclaw && adduser -S crystalclaw -G crystalclaw \
+RUN groupadd -r crystalclaw && useradd -m -r -g crystalclaw crystalclaw \
     && echo "crystalclaw ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers \
-    && echo -e '#!/bin/sh\nexec sudo /sbin/apk "$@"' > /usr/local/bin/apk \
-    && chmod +x /usr/local/bin/apk
+    && printf '#!/bin/sh\nexec sudo /usr/bin/apt "$@"\n' > /usr/local/bin/apt \
+    && chmod +x /usr/local/bin/apt \
+    && printf '#!/bin/sh\nexec sudo /usr/bin/apt-get "$@"\n' > /usr/local/bin/apt-get \
+    && chmod +x /usr/local/bin/apt-get \
+    && printf '#!/bin/sh\nexec sudo /usr/bin/dpkg "$@"\n' > /usr/local/bin/dpkg \
+    && chmod +x /usr/local/bin/dpkg
 
 WORKDIR /app
 

@@ -12,8 +12,8 @@ chown -R crystalclaw:crystalclaw "$CONFIG_DIR"
 # Create default config and workspace if missing (as crystalclaw user)
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "🕷️ No config found — running onboard to create defaults..."
-    su-exec crystalclaw /app/bin/crystalclaw onboard
+    gosu crystalclaw /app/bin/crystalclaw onboard
 fi
 
 # Drop to crystalclaw user and exec the main command
-exec su-exec crystalclaw /app/bin/crystalclaw "$@"
+exec gosu crystalclaw /app/bin/crystalclaw "$@"
