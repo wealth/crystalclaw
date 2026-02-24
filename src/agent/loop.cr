@@ -139,11 +139,14 @@ module CrystalClaw
 
         # Message tool
         msg_tool = Tools::MessageTool.new
-        msg_tool.set_send_callback do |channel, chat_id, content|
+        msg_tool.set_send_callback do |channel, chat_id, content, media_json|
+          metadata = {} of String => String
+          metadata["media"] = media_json if media_json
           @bus.publish_outbound(Bus::OutboundMessage.new(
             channel: channel,
             chat_id: chat_id,
-            content: content
+            content: content,
+            metadata: metadata
           ))
         end
         @registry.register_tool_to_all(msg_tool)
