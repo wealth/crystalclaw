@@ -348,7 +348,7 @@ module CrystalClaw
               @bus.publish_outbound(Bus::OutboundMessage.new(
                 channel: channel,
                 chat_id: chat_id,
-                content: "🛠 Executing tool: `#{func.name}`...",
+                content: "🛠 `#{func.name}(#{args.values.join(", ")})`",
                 metadata: metadata
               ))
             end
