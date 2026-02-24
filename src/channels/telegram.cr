@@ -156,7 +156,25 @@ module CrystalClaw
             "chat_id" => chat_id,
             "photo"   => photo,
           }.to_json
-          HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
+          response = HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
+          if !response.success?
+            Logger.warn("telegram", "sendPhoto failed: #{response.status_code} - #{response.body[0, 200]}")
+
+            # If it's a GIF, Telegram might reject sendPhoto. Fall back to sendAnimation.
+            if photo.downcase.includes?(".gif")
+              anim_url = "https://api.telegram.org/bot#{@token}/sendAnimation"
+              anim_body = {
+                "chat_id"   => chat_id,
+                "animation" => photo,
+              }.to_json
+              anim_response = HTTP::Client.post(anim_url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: anim_body)
+              if !anim_response.success?
+                Logger.warn("telegram", "sendAnimation fallback failed: #{anim_response.status_code} - #{anim_response.body[0, 200]}")
+              else
+                Logger.info("telegram", "sendAnimation fallback succeeded for GIF")
+              end
+            end
+          end
         else
           send_file_multipart("sendPhoto", chat_id, "photo", photo)
         end
@@ -171,7 +189,10 @@ module CrystalClaw
             "chat_id" => chat_id,
             "audio"   => audio,
           }.to_json
-          HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
+          response = HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
+          if !response.success?
+            Logger.warn("telegram", "sendAudio failed: #{response.status_code} - #{response.body[0, 200]}")
+          end
         else
           send_file_multipart("sendAudio", chat_id, "audio", audio)
         end
