@@ -176,7 +176,7 @@ module CrystalClaw
         set_tool_contexts(agent, msg.channel, msg.chat_id)
 
         run_agent_loop(agent, msg.content, route.session_key, msg.channel, msg.chat_id,
-          enable_summary: true, no_history: false)
+          enable_summary: true, no_history: false, metadata: msg.metadata)
       end
 
       private def set_tool_contexts(agent : Instance, channel : String, chat_id : String)
@@ -219,6 +219,7 @@ module CrystalClaw
         chat_id : String,
         enable_summary : Bool = false,
         no_history : Bool = false,
+        metadata : Hash(String, String) = {} of String => String,
       ) : String
         # Reset message tool state
         reset_message_tool
@@ -347,7 +348,8 @@ module CrystalClaw
               @bus.publish_outbound(Bus::OutboundMessage.new(
                 channel: channel,
                 chat_id: chat_id,
-                content: "🛠 Executing tool: `#{func.name}`..."
+                content: "🛠 Executing tool: `#{func.name}`...",
+                metadata: metadata
               ))
             end
 
