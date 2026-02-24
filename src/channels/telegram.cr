@@ -1,5 +1,6 @@
 require "http/client"
 require "json"
+require "mime"
 require "./base"
 require "../bus/bus"
 require "../logger/logger"
@@ -222,6 +223,130 @@ module CrystalClaw
           end
         rescue ex
           Logger.warn("telegram", "Failed to send chunk: #{ex.message}")
+        end
+      end
+
+      def send_photo(chat_id : String, photo : String)
+        if photo.starts_with?("http://") || photo.starts_with?("https://")
+          url = "https://api.telegram.org/bot#{@token}/sendPhoto"
+          body = {
+            "chat_id" => chat_id,
+            "photo"   => photo,
+          }.to_json
+          HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
+        else
+          send_file_multipart("sendPhoto", chat_id, "photo", photo)
+        end
+      rescue ex
+        Logger.warn("telegram", "Failed to send photo: #{ex.message}")
+      end
+
+      def send_audio(chat_id : String, audio : String)
+        if audio.starts_with?("http://") || audio.starts_with?("https://")
+          url = "https://api.telegram.org/bot#{@token}/sendAudio"
+          body = {
+            "chat_id" => chat_id,
+            "audio"   => audio,
+          }.to_json
+          HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
+        else
+          send_file_multipart("sendAudio", chat_id, "audio", audio)
+        end
+      rescue ex
+        Logger.warn("telegram", "Failed to send audio: #{ex.message}")
+      end
+
+      def send_media_group(chat_id : String, media : Array(JSON::Any))
+        has_local = media.any? { |m| m["url"]? && !m["url"].as_s.starts_with?("http") }
+
+        if !has_local
+          url = "https://api.telegram.org/bot#{@token}/sendMediaGroup"
+          media_payload = media.map do |m|
+            {
+              "type"  => m["type"]?.try(&.as_s?) || "photo",
+              "media" => m["url"]?.try(&.as_s?) || "",
+            }
+          end
+
+          body = {
+            "chat_id" => chat_id,
+            "media"   => media_payload,
+          }.to_json
+
+          HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
+        else
+          send_media_group_multipart(chat_id, media)
+        end
+      rescue ex
+        Logger.warn("telegram", "Failed to send media group: #{ex.message}")
+      end
+
+      private def send_file_multipart(endpoint : String, chat_id : String, file_field : String, file_path : String)
+        return unless File.exists?(file_path)
+        url = "https://api.telegram.org/bot#{@token}/#{endpoint}"
+
+        io = IO::Memory.new
+        builder = HTTP::FormData::Builder.new(io)
+        builder.field("chat_id", chat_id)
+
+        File.open(file_path) do |file|
+          mime_type = MIME.from_filename(file_path, "application/octet-stream")
+          metadata = HTTP::FormData::FileMetadata.new(filename: File.basename(file_path))
+          headers = HTTP::Headers{"Content-Type" => mime_type}
+          builder.file(file_field, file, metadata, headers)
+        end
+
+        builder.finish
+        boundary = builder.boundary
+
+        HTTP::Client.post(url,
+          headers: HTTP::Headers{"Content-Type" => "multipart/form-data; boundary=#{boundary}"},
+          body: io.to_s
+        )
+      end
+
+      private def send_media_group_multipart(chat_id : String, media : Array(JSON::Any))
+        url = "https://api.telegram.org/bot#{@token}/sendMediaGroup"
+        io = IO::Memory.new
+        builder = HTTP::FormData::Builder.new(io)
+        builder.field("chat_id", chat_id)
+
+        media_payload = [] of Hash(String, String)
+        files_to_close = [] of File
+
+        begin
+          media.each_with_index do |m, idx|
+            m_url = m["url"]?.try(&.as_s?) || ""
+            if m_url.empty?
+              next
+            end
+            m_type = m["type"]?.try(&.as_s?) || "photo"
+
+            if m_url.starts_with?("http://") || m_url.starts_with?("https://")
+              media_payload << {"type" => m_type, "media" => m_url}
+            elsif File.exists?(m_url)
+              attach_name = "file#{idx}"
+              media_payload << {"type" => m_type, "media" => "attach://#{attach_name}"}
+
+              file = File.open(m_url)
+              files_to_close << file
+              mime_type = MIME.from_filename(m_url, "application/octet-stream")
+              metadata = HTTP::FormData::FileMetadata.new(filename: File.basename(m_url))
+              headers = HTTP::Headers{"Content-Type" => mime_type}
+              builder.file(attach_name, file, metadata, headers)
+            end
+          end
+
+          builder.field("media", media_payload.to_json)
+          builder.finish
+          boundary = builder.boundary
+
+          HTTP::Client.post(url,
+            headers: HTTP::Headers{"Content-Type" => "multipart/form-data; boundary=#{boundary}"},
+            body: io.to_s
+          )
+        ensure
+          files_to_close.each(&.close)
         end
       end
 

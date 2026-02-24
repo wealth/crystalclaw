@@ -52,6 +52,7 @@ module CrystalClaw
         lines << "✓ Configuration reloaded from database"
         lines << "  • Model: #{@cfg.agents.defaults.model}"
         lines << "  • Tools: #{agent.tools.size} loaded"
+        lines << "  • Report Tools: #{@cfg.agents.defaults.report_tool_usage ? "enabled" : "disabled"}"
         lines << "  • Telegram: #{@cfg.channels.telegram.enabled ? "enabled" : "disabled"}"
         lines << "  • Discord: #{@cfg.channels.discord.enabled ? "enabled" : "disabled"}"
         lines << "  • Max Messenger: #{@cfg.channels.max_messenger.enabled ? "enabled" : "disabled"}"
@@ -341,6 +342,14 @@ module CrystalClaw
             end
 
             Logger.info("agent", "Tool: #{func.name}(#{args.values.join(", ")})")
+
+            if agent.report_tool_usage && channel != "cli"
+              @bus.publish_outbound(Bus::OutboundMessage.new(
+                channel: channel,
+                chat_id: chat_id,
+                content: "🛠 Executing tool: `#{func.name}`..."
+              ))
+            end
 
             # Execute tool
             begin

@@ -28,6 +28,7 @@ module CrystalClaw
           temperature: defaults.temperature,
           max_tool_iterations: defaults.max_tool_iterations,
           restrict_to_workspace: defaults.restrict_to_workspace,
+          report_tool_usage: defaults.report_tool_usage,
           memory_store: memory_store
         )
         default_agent.register_default_tools
@@ -50,6 +51,7 @@ module CrystalClaw
             temperature: defaults.temperature,
             max_tool_iterations: defaults.max_tool_iterations,
             restrict_to_workspace: defaults.restrict_to_workspace,
+            report_tool_usage: defaults.report_tool_usage,
             memory_store: memory_store
           )
           agent.register_default_tools

@@ -47,6 +47,7 @@ module CrystalClaw
       cfg.agents.defaults.temperature = 0.7
       cfg.agents.defaults.max_tool_iterations = 20
       cfg.agents.defaults.restrict_to_workspace = true
+      cfg.agents.defaults.report_tool_usage = false
       cfg.gateway.host = "0.0.0.0"
       cfg.gateway.port = 18791
       cfg.heartbeat.interval = 30
@@ -147,6 +148,7 @@ module CrystalClaw
     property max_tokens : Int32 = 8192
     property temperature : Float64 = 0.7
     property max_tool_iterations : Int32 = 20
+    property report_tool_usage : Bool = false
 
     def initialize
     end

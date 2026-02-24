@@ -307,6 +307,26 @@ module CrystalClaw
           else
             tg.send_message(msg.chat_id, msg.content)
           end
+
+          if media_json = msg.metadata["media"]?
+            begin
+              media = JSON.parse(media_json).as_a
+              photos = media.select { |m| m["type"] == "photo" }
+              audios = media.select { |m| m["type"] == "audio" }
+
+              if photos.size == 1
+                tg.send_photo(msg.chat_id, photos.first["url"].as_s)
+              elsif photos.size > 1
+                tg.send_media_group(msg.chat_id, photos)
+              end
+
+              audios.each do |audio|
+                tg.send_audio(msg.chat_id, audio["url"].as_s)
+              end
+            rescue ex
+              Logger.warn("telegram", "Failed to parse or send media: \#{ex.message}")
+            end
+          end
         end
       end
     end

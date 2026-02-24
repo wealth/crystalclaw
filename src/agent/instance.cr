@@ -15,6 +15,7 @@ module CrystalClaw
       property temperature : Float64
       property max_tool_iterations : Int32
       property restrict_to_workspace : Bool
+      property report_tool_usage : Bool
       property tools : Tools::ToolRegistry
       property context_builder : ContextBuilder
       property session_manager : Session::Manager
@@ -30,6 +31,7 @@ module CrystalClaw
         @temperature = 0.7,
         @max_tool_iterations = 20,
         @restrict_to_workspace = true,
+        @report_tool_usage = false,
         memory_store : Memory::Store? = nil,
       )
         ws = @workspace.sub("~", Path.home.to_s)
