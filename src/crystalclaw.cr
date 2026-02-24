@@ -302,11 +302,7 @@ module CrystalClaw
       # Set outbound handler for Telegram
       msg_bus.on_outbound do |msg|
         if msg.channel == "telegram"
-          if thinking_id = msg.metadata["thinking_message_id"]?
-            tg.edit_message(msg.chat_id, thinking_id.to_i64, msg.content)
-          else
-            tg.send_message(msg.chat_id, msg.content)
-          end
+          tg.send_message(msg.chat_id, msg.content)
 
           if media_json = msg.metadata["media"]?
             begin

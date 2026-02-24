@@ -91,42 +91,13 @@ module CrystalClaw
 
         Logger.info("telegram", "Message from #{sender_id} in #{chat_id}: #{text[0, 50]}")
 
-        # Send "Thinking..." placeholder immediately
-        metadata = {} of String => String
-        if thinking_id = send_thinking_message(chat_id)
-          metadata["thinking_message_id"] = thinking_id.to_s
-        end
-
         @bus.publish_inbound(Bus::InboundMessage.new(
           channel: "telegram",
           sender_id: sender_id,
           chat_id: chat_id,
           content: text,
-          session_key: "telegram:#{chat_id}",
-          metadata: metadata
+          session_key: "telegram:#{chat_id}"
         ))
-      end
-
-      private def send_thinking_message(chat_id : String) : Int64?
-        url = "https://api.telegram.org/bot#{@token}/sendMessage"
-        body = {
-          "chat_id" => chat_id,
-          "text"    => "Processing... 🤔",
-        }.to_json
-
-        begin
-          response = HTTP::Client.post(url,
-            headers: HTTP::Headers{"Content-Type" => "application/json"},
-            body: body
-          )
-          if response.success?
-            data = JSON.parse(response.body)
-            data.dig?("result", "message_id").try(&.as_i64?)
-          end
-        rescue ex
-          Logger.warn("telegram", "Failed to send thinking message: #{ex.message}")
-          nil
-        end
       end
 
       private def get_bot_username : String
@@ -137,54 +108,6 @@ module CrystalClaw
           data.dig?("result", "username").try(&.as_s?) || "bot"
         else
           "bot"
-        end
-      end
-
-      def edit_message(chat_id : String, message_id : Int64, text : String)
-        escaped = escape_markdown_v2(text)
-        chunks = split_message(escaped, 4096)
-
-        # Edit the thinking message with the first chunk
-        edit_url = "https://api.telegram.org/bot#{@token}/editMessageText"
-        body = {
-          "chat_id"    => chat_id,
-          "message_id" => message_id,
-          "text"       => chunks[0],
-          "parse_mode" => "MarkdownV2",
-        }.to_json
-
-        begin
-          response = HTTP::Client.post(edit_url,
-            headers: HTTP::Headers{"Content-Type" => "application/json"},
-            body: body
-          )
-          unless response.success?
-            # Retry without formatting
-            body_plain = {
-              "chat_id"    => chat_id,
-              "message_id" => message_id,
-              "text"       => strip_markdown(text),
-            }.to_json
-            response = HTTP::Client.post(edit_url,
-              headers: HTTP::Headers{"Content-Type" => "application/json"},
-              body: body_plain
-            )
-            unless response.success?
-              send_message(chat_id, text)
-              return
-            end
-          end
-        rescue ex
-          Logger.warn("telegram", "Failed to edit message, falling back to send: #{ex.message}")
-          send_message(chat_id, text)
-          return
-        end
-
-        # Send remaining chunks as new messages
-        if chunks.size > 1
-          chunks[1..].each do |chunk|
-            send_single_chunk(chat_id, chunk)
-          end
         end
       end
 
