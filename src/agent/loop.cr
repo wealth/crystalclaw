@@ -347,7 +347,7 @@ module CrystalClaw
 
             Logger.info("agent", "Tool: #{func.name}(#{args.values.join(", ")})")
 
-            if agent.report_tool_usage && channel != "cli"
+            if agent.report_tool_usage && channel != "cli" && func.name != "message"
               @bus.publish_outbound(Bus::OutboundMessage.new(
                 channel: channel,
                 chat_id: chat_id,
