@@ -170,9 +170,14 @@ module CrystalClaw
               anim_response = HTTP::Client.post(anim_url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: anim_body)
               if !anim_response.success?
                 Logger.warn("telegram", "sendAnimation fallback failed: #{anim_response.status_code} - #{anim_response.body[0, 200]}")
+                Logger.info("telegram", "Attempting download fallback for photo...")
+                download_and_send_multipart("sendPhoto", chat_id, "photo", photo)
               else
                 Logger.info("telegram", "sendAnimation fallback succeeded for GIF")
               end
+            else
+              Logger.info("telegram", "Attempting download fallback for photo...")
+              download_and_send_multipart("sendPhoto", chat_id, "photo", photo)
             end
           end
         else
@@ -192,6 +197,8 @@ module CrystalClaw
           response = HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: body)
           if !response.success?
             Logger.warn("telegram", "sendAudio failed: #{response.status_code} - #{response.body[0, 200]}")
+            Logger.info("telegram", "Attempting download fallback for audio...")
+            download_and_send_multipart("sendAudio", chat_id, "audio", audio)
           end
         else
           send_file_multipart("sendAudio", chat_id, "audio", audio)
@@ -244,10 +251,44 @@ module CrystalClaw
         boundary = builder.boundary
         io.rewind
 
-        HTTP::Client.post(url,
+        response = HTTP::Client.post(url,
           headers: HTTP::Headers{"Content-Type" => "multipart/form-data; boundary=#{boundary}"},
           body: io
         )
+        if !response.success?
+          Logger.warn("telegram", "send_file_multipart failed: #{response.status_code} - #{response.body[0, 200]}")
+        end
+      end
+
+      private def download_and_send_multipart(endpoint : String, chat_id : String, file_field : String, url : String)
+        uri = URI.parse(url)
+        ext = File.extname(uri.path || "")
+        ext = ".jpg" if ext.empty?
+
+        tempfile = File.tempfile("download", ext)
+        begin
+          client = HTTP::Client.new(uri)
+          client.connect_timeout = 5.seconds
+          client.read_timeout = 10.seconds
+
+          # Simplified download (no redirect handling)
+          HTTP::Client.get(url) do |response|
+            if response.success?
+              IO.copy(response.body_io, tempfile)
+            else
+              Logger.warn("telegram", "Failed to download media #{url}: #{response.status_code}")
+              return
+            end
+          end
+          tempfile.close
+
+          # Send via multipart
+          send_file_multipart(endpoint, chat_id, file_field, tempfile.path)
+        rescue ex
+          Logger.warn("telegram", "Error downloading media #{url}: #{ex.message}")
+        ensure
+          tempfile.delete
+        end
       end
 
       private def send_media_group_multipart(chat_id : String, media : Array(JSON::Any))
