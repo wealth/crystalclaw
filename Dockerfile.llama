@@ -3,12 +3,12 @@ FROM ubuntu:24.04 AS downloader
 ARG RELEASE_TAG=th-quantize_individual_tensors-b4410-5e05f97
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget unzip ca-certificates && \
+    curl unzip ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-RUN wget -q \
+RUN curl -fSL \
     "https://github.com/Thireus/ik_llama.cpp/releases/download/${RELEASE_TAG}/ik_llama-${RELEASE_TAG}-bin-ubuntu-x64.zip" \
-    -O /tmp/ik_llama.zip && \
+    -o /tmp/ik_llama.zip && \
     unzip /tmp/ik_llama.zip -d /tmp/ik_llama && \
     echo "=== zip contents ===" && find /tmp/ik_llama -type f && \
     SERVER=$(find /tmp/ik_llama -type f \( -name '*server*' -o -name 'llama-server' \) | head -1) && \
