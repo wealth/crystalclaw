@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     gosu \
     libpq5 \
+    postgresql-client \
     sudo \
     wget \
     && rm -rf /var/lib/apt/lists/*

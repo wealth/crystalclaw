@@ -27,16 +27,13 @@ services:
     restart: unless-stopped
     ports:
       - "18791:18791"
-    # volumes:
-    #   - ./workspace/skills:/home/crystalclaw/.crystalclaw/workspace/skills:ro
     environment:
-      - CRYSTALCLAW_POSTGRES_URL=${CRYSTALCLAW_POSTGRES_URL:-}
+      - CRYSTALCLAW_POSTGRES_URL=postgres://crystalclaw:crystalclaw@postgres:5432/crystalclaw
     depends_on:
       llama:
         condition: service_healthy
       postgres:
-        condition: service_started
-        required: false
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:18791/health" ]
       interval: 30s
@@ -44,14 +41,10 @@ services:
       start_period: 10s
       retries: 3
 
-  # Optional: uncomment to use PostgreSQL backend
-  # Set CRYSTALCLAW_POSTGRES_URL=postgres://crystalclaw:crystalclaw@postgres:5432/crystalclaw
   postgres:
     image: postgres:16-alpine
     container_name: crystalclaw-postgres
     restart: unless-stopped
-    profiles:
-      - postgres
     environment:
       POSTGRES_USER: crystalclaw
       POSTGRES_PASSWORD: crystalclaw
@@ -60,6 +53,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crystalclaw -d crystalclaw"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   pgdata:
