@@ -28,7 +28,7 @@ COPY --from=downloader /usr/local/lib/ /usr/local/lib/
 COPY --from=downloader /usr/local/bin/llama-server /usr/local/bin/llama-server
 RUN ldconfig
 
-RUN printf '#!/bin/sh\nset -e\nMODEL_FILE="/models/${HF_FILE}"\nif [ ! -f "$MODEL_FILE" ]; then\n  echo "Downloading ${HF_FILE} from ${HF_REPO}..."\n  mkdir -p /models\n  curl -fSL "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" -o "$MODEL_FILE"\n  echo "Download complete."\nfi\nexec llama-server --model "$MODEL_FILE" --host "${HOST}" --port "${PORT}" --ctx-size "${CTX_SIZE}" --n-gpu-layers "${N_GPU_LAYERS}"\n' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN printf '#!/bin/sh\nset -e\nMODEL_FILE="/models/${HF_FILE}"\nif [ ! -f "$MODEL_FILE" ]; then\n  echo "Downloading ${HF_FILE} from ${HF_REPO}..."\n  mkdir -p /models\n  curl -fSL "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" -o "$MODEL_FILE"\n  echo "Download complete."\nfi\nexec llama-server --model "$MODEL_FILE" --host "${HOST}" --port "${PORT}" --ctx-size "${CTX_SIZE}" --n-gpu-layers "${N_GPU_LAYERS}" --jinja\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 ENV HF_REPO=Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-GGUF
 ENV HF_FILE=Qwen3.5-4B.Q4_K_M.gguf
