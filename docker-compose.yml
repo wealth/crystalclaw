@@ -9,9 +9,9 @@ services:
     container_name: crystalclaw-llama
     restart: unless-stopped
     volumes:
-      - ./models:/models:ro
+      - llama_cache:/root/.cache/huggingface
     environment:
-      - MODEL_PATH=${LLAMA_MODEL_PATH:-/models/qwen3.5-4b.gguf}
+      - HF_REPO=${LLAMA_HF_REPO:-Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-GGUF}
       - CTX_SIZE=${LLAMA_CTX_SIZE:-4096}
       - N_GPU_LAYERS=${LLAMA_N_GPU_LAYERS:-0}
     # OpenAI-compatible API available at http://llama:8080/v1 within the stack
@@ -62,5 +62,6 @@ services:
 
 volumes:
   pgdata:
+  llama_cache:
 
 
