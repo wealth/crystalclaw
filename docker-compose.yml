@@ -4,7 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile.llama
       args:
-        RELEASE_TAG: th-quantize_individual_tensors-b4410-5e05f97
+        RELEASE_TAG: main-b4466-d07d4c7
+        AVX_LEVEL: avx2
     container_name: crystalclaw-llama
     restart: unless-stopped
     volumes:

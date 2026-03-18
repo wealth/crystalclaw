@@ -1,17 +1,19 @@
 FROM ubuntu:24.04 AS downloader
 
-ARG RELEASE_TAG=th-quantize_individual_tensors-b4410-5e05f97
+ARG RELEASE_TAG=main-b4466-d07d4c7
+# avx2 is the most compatible; use avx512/avx512_vnni/etc. for newer CPUs
+ARG AVX_LEVEL=avx2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl unzip ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -fSL \
-    "https://github.com/Thireus/ik_llama.cpp/releases/download/${RELEASE_TAG}/ik_llama-${RELEASE_TAG}-bin-ubuntu-x64.zip" \
+    "https://github.com/Thireus/ik_llama.cpp/releases/download/${RELEASE_TAG}/ik_llama-${RELEASE_TAG}-bin-ubuntu-x64-${AVX_LEVEL}.zip" \
     -o /tmp/ik_llama.zip && \
     unzip /tmp/ik_llama.zip -d /tmp/ik_llama && \
     echo "=== zip contents ===" && find /tmp/ik_llama -type f && \
-    SERVER=$(find /tmp/ik_llama -type f \( -name '*server*' -o -name 'llama-server' \) | head -1) && \
+    SERVER=$(find /tmp/ik_llama -type f -name '*server*' | head -1) && \
     test -n "$SERVER" && cp "$SERVER" /usr/local/bin/llama-server && \
     chmod +x /usr/local/bin/llama-server
 
