@@ -1,4 +1,22 @@
 services:
+  llama:
+    build:
+      context: .
+      dockerfile: Dockerfile.llama
+      args:
+        RELEASE_TAG: th-quantize_individual_tensors-b4410-5e05f97
+    container_name: crystalclaw-llama
+    restart: unless-stopped
+    volumes:
+      - ./models:/models:ro
+    environment:
+      - MODEL_PATH=${LLAMA_MODEL_PATH:-/models/qwen3.5-4b.gguf}
+      - CTX_SIZE=${LLAMA_CTX_SIZE:-4096}
+      - N_GPU_LAYERS=${LLAMA_N_GPU_LAYERS:-0}
+    # OpenAI-compatible API available at http://llama:8080/v1 within the stack
+    # Configure crystalclaw to use it via the openai provider with base_url=http://llama:8080/v1
+    # or the ollama provider with base_url=http://llama:8080
+
   gateway:
     build:
       context: .
@@ -13,6 +31,8 @@ services:
     environment:
       - CRYSTALCLAW_POSTGRES_URL=${CRYSTALCLAW_POSTGRES_URL:-}
     depends_on:
+      llama:
+        condition: service_healthy
       postgres:
         condition: service_started
         required: false

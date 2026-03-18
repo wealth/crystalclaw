@@ -1,0 +1,41 @@
+FROM ubuntu:24.04 AS downloader
+
+ARG RELEASE_TAG=th-quantize_individual_tensors-b4410-5e05f97
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget unzip ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN wget -q \
+    "https://github.com/Thireus/ik_llama.cpp/releases/download/${RELEASE_TAG}/ik_llama-${RELEASE_TAG}-bin-ubuntu-x64.zip" \
+    -O /tmp/ik_llama.zip && \
+    unzip /tmp/ik_llama.zip -d /tmp/ik_llama
+
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=downloader /tmp/ik_llama/ /tmp/ik_llama/
+RUN find /tmp/ik_llama -name 'llama-server' -exec cp {} /usr/local/bin/ \; && \
+    chmod +x /usr/local/bin/llama-server && \
+    rm -rf /tmp/ik_llama
+
+ENV MODEL_PATH=/models/qwen3.5-4b.gguf
+ENV HOST=0.0.0.0
+ENV PORT=8080
+ENV CTX_SIZE=4096
+ENV N_GPU_LAYERS=0
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
+    CMD curl -sf http://localhost:8080/health || exit 1
+
+CMD llama-server \
+    --model "${MODEL_PATH}" \
+    --host "${HOST}" \
+    --port "${PORT}" \
+    --ctx-size "${CTX_SIZE}" \
+    --n-gpu-layers "${N_GPU_LAYERS}"
