@@ -9,7 +9,7 @@ services:
     container_name: crystalclaw-llama
     restart: unless-stopped
     volumes:
-      - llama_cache:/root/.cache/huggingface
+      - llama_cache:/models
     environment:
       - HF_REPO=${LLAMA_HF_REPO:-Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-GGUF}
       - HF_FILE=${LLAMA_HF_FILE:-Qwen3.5-4B.Q4_K_M.gguf}
