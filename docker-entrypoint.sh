@@ -6,12 +6,20 @@ export HOME=/home/crystalclaw
 if [ -n "$CRYSTALCLAW_POSTGRES_URL" ]; then
     # ── Postgres mode: no file config ──
 
+    # Parse connection details from URL: postgres://user:pass@host:port/db
+    PG_USER=$(echo "$CRYSTALCLAW_POSTGRES_URL" | sed 's|.*://\([^:]*\):.*|\1|')
+    PG_PASS=$(echo "$CRYSTALCLAW_POSTGRES_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
+    PG_HOST=$(echo "$CRYSTALCLAW_POSTGRES_URL" | sed 's|.*@\([^:/]*\).*|\1|')
+    PG_PORT=$(echo "$CRYSTALCLAW_POSTGRES_URL" | sed 's|.*:\([0-9]*\)/.*|\1|')
+    PG_DB=$(echo "$CRYSTALCLAW_POSTGRES_URL" | sed 's|.*/\([^?]*\).*|\1|')
+    export PGPASSWORD="$PG_PASS"
+
     echo "🕷️ Waiting for PostgreSQL..."
-    until pg_isready -d "$CRYSTALCLAW_POSTGRES_URL" -q; do sleep 1; done
+    until pg_isready -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -q; do sleep 1; done
 
     # Ensure the config table exists (crystal app creates it on first connect,
     # but we need it before we can check/seed it)
-    psql "$CRYSTALCLAW_POSTGRES_URL" -q <<'SQL'
+    psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" -q <<'SQL'
         CREATE TABLE IF NOT EXISTS config (
             id         SERIAL PRIMARY KEY,
             key        TEXT NOT NULL UNIQUE,
@@ -22,10 +30,10 @@ if [ -n "$CRYSTALCLAW_POSTGRES_URL" ]; then
 SQL
 
     # Seed provider config on first run (when table is empty)
-    COUNT=$(psql "$CRYSTALCLAW_POSTGRES_URL" -t -c "SELECT COUNT(*) FROM config;" | tr -d ' ')
+    COUNT=$(psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" -t -c "SELECT COUNT(*) FROM config;" | tr -d ' ')
     if [ "$COUNT" = "0" ]; then
         echo "🕷️ Seeding initial config into PostgreSQL..."
-        psql "$CRYSTALCLAW_POSTGRES_URL" -q <<SQL
+        psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" -q <<SQL
             INSERT INTO config (key, value) VALUES
                 ('agents.defaults.model',           '"qwen3.5-4b"'),
                 ('agents.defaults.provider',        '"ollama"'),
