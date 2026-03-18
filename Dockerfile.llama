@@ -9,7 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN wget -q \
     "https://github.com/Thireus/ik_llama.cpp/releases/download/${RELEASE_TAG}/ik_llama-${RELEASE_TAG}-bin-ubuntu-x64.zip" \
     -O /tmp/ik_llama.zip && \
-    unzip /tmp/ik_llama.zip -d /tmp/ik_llama
+    unzip /tmp/ik_llama.zip -d /tmp/ik_llama && \
+    echo "=== zip contents ===" && find /tmp/ik_llama -type f && \
+    SERVER=$(find /tmp/ik_llama -type f \( -name '*server*' -o -name 'llama-server' \) | head -1) && \
+    test -n "$SERVER" && cp "$SERVER" /usr/local/bin/llama-server && \
+    chmod +x /usr/local/bin/llama-server
 
 FROM ubuntu:24.04
 
@@ -17,10 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=downloader /tmp/ik_llama/ /tmp/ik_llama/
-RUN find /tmp/ik_llama -name 'llama-server' -exec cp {} /usr/local/bin/ \; && \
-    chmod +x /usr/local/bin/llama-server && \
-    rm -rf /tmp/ik_llama
+COPY --from=downloader /usr/local/bin/llama-server /usr/local/bin/llama-server
 
 ENV MODEL_PATH=/models/qwen3.5-4b.gguf
 ENV HOST=0.0.0.0
