@@ -13,8 +13,9 @@ RUN curl -fSL \
     -o /tmp/ik_llama.zip && \
     unzip /tmp/ik_llama.zip -d /tmp/ik_llama && \
     echo "=== zip contents ===" && find /tmp/ik_llama -type f && \
-    SERVER=$(find /tmp/ik_llama -type f -name '*server*' | head -1) && \
-    test -n "$SERVER" && cp "$SERVER" /usr/local/bin/llama-server && \
+    BIN_DIR=$(find /tmp/ik_llama -type f -name '*server*' | head -1 | xargs dirname) && \
+    cp "$BIN_DIR"/*.so* /usr/local/lib/ 2>/dev/null || true && \
+    cp "$BIN_DIR"/llama-server /usr/local/bin/llama-server && \
     chmod +x /usr/local/bin/llama-server
 
 FROM ubuntu:24.04
@@ -23,7 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
+COPY --from=downloader /usr/local/lib/ /usr/local/lib/
 COPY --from=downloader /usr/local/bin/llama-server /usr/local/bin/llama-server
+RUN ldconfig
 
 ENV MODEL_PATH=/models/qwen3.5-4b.gguf
 ENV HOST=0.0.0.0
