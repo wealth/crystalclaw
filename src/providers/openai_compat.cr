@@ -140,7 +140,8 @@ module CrystalClaw
         message = choice["message"]?
         finish_reason = choice["finish_reason"]?.try(&.as_s?) || "stop"
 
-        content = message.try(&.["content"]?).try(&.as_s?) || ""
+        raw = message.try(&.["content"]?).try(&.as_s?) || ""
+        content = raw.gsub(/<think>.*?<\/think>/m, "").strip
 
         tool_calls = [] of ToolCall
         if tcs = message.try(&.["tool_calls"]?)
