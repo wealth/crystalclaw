@@ -30,8 +30,8 @@ RUN ldconfig
 
 RUN printf '#!/bin/sh\nset -e\nMODEL_FILE="/models/${HF_FILE}"\nif [ ! -f "$MODEL_FILE" ]; then\n  echo "Downloading ${HF_FILE} from ${HF_REPO}..."\n  mkdir -p /models\n  curl -fSL "https://huggingface.co/${HF_REPO}/resolve/main/${HF_FILE}" -o "$MODEL_FILE"\n  echo "Download complete."\nfi\nexec llama-server --model "$MODEL_FILE" --host "${HOST}" --port "${PORT}" --ctx-size "${CTX_SIZE}" --n-gpu-layers "${N_GPU_LAYERS}" --jinja\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 
-ENV HF_REPO=Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-GGUF
-ENV HF_FILE=Qwen3.5-4B.Q4_K_M.gguf
+ENV HF_REPO=lmstudio-community/Qwen3.5-4B-GGUF
+ENV HF_FILE=Qwen3.5-4B-Q4_K_M.gguf
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV CTX_SIZE=4096
