@@ -12,6 +12,7 @@ services:
       - llama_cache:/root/.cache/huggingface
     environment:
       - HF_REPO=${LLAMA_HF_REPO:-Jackrong/Qwen3.5-4B-Claude-4.6-Opus-Reasoning-Distilled-GGUF}
+      - HF_FILE=${LLAMA_HF_FILE:-Qwen3.5-4B.Q4_K_M.gguf}
       - CTX_SIZE=${LLAMA_CTX_SIZE:-4096}
       - N_GPU_LAYERS=${LLAMA_N_GPU_LAYERS:-0}
     # OpenAI-compatible API available at http://llama:8080/v1 within the stack
