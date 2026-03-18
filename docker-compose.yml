@@ -25,9 +25,8 @@ services:
     restart: unless-stopped
     ports:
       - "18791:18791"
-    volumes:
-      # Optional: mount skills directory if using filesystem-based skills
-      # - ./workspace/skills:/home/crystalclaw/.crystalclaw/workspace/skills:ro
+    # volumes:
+    #   - ./workspace/skills:/home/crystalclaw/.crystalclaw/workspace/skills:ro
     environment:
       - CRYSTALCLAW_POSTGRES_URL=${CRYSTALCLAW_POSTGRES_URL:-}
     depends_on:
